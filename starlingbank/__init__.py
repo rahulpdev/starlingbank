@@ -4,13 +4,16 @@ from uuid import uuid4
 from json import dumps as json_dumps
 from base64 import b64decode
 from typing import Dict
+from datetime import datetime
 
 BASE_URL = "https://api.starlingbank.com/api/v2"
 BASE_URL_SANDBOX = "https://api-sandbox.starlingbank.com/api/v2"
+YEAR = str(datetime.now().year)
+MONTH = datetime.now().strftime("%B").upper()  # Converts month to uppercase
 
 
+"""Build a URL from the API's base URLs."""
 def _url(endpoint: str, sandbox: bool = False) -> str:
-    """Build a URL from the API's base URLs."""
     if sandbox is True:
         url = BASE_URL_SANDBOX
     else:
@@ -18,8 +21,8 @@ def _url(endpoint: str, sandbox: bool = False) -> str:
     return "{0}{1}".format(url, endpoint)
 
 
+"""Representation of a Savings Goal."""
 class SavingsGoal:
-    """Representation of a Savings Goal."""
 
     def __init__(
         self, auth_headers: Dict, sandbox: bool, account_uid: str
@@ -122,8 +125,39 @@ class SavingsGoal:
             file.write(b64decode(base64_image))
 
 
+"""Representation of a Spending Category."""
+class SpendingCategory:
+
+    def __init__(
+        self, auth_headers: Dict, sandbox: bool, account_uid: str
+    ) -> None:
+        self._auth_headers = auth_headers
+        self._sandbox = sandbox
+        self.account_uid = account_uid
+
+        self.spending_category = None
+        self.net_direction = None
+        self.currency = None
+        self.total_spent = 0.0
+        self.total_received = 0.0
+        self.net_spend = 0.0
+        self.percentage = 0.0
+        self.transaction_count = 0
+
+    def update(self, category: Dict = None) -> None:
+        """Update a single spending category data."""
+        self.spending_category = category.get("spendingCategory")
+        self.net_direction = category.get("netDirection")
+        self.currency = category.get("currency")
+        self.total_spent = category.get("totalSpent")
+        self.total_received = category.get("totalReceived")
+        self.net_spend = category.get("netSpend")
+        self.percentage = category.get("percentage")
+        self.transaction_count = category.get("transactionCount")
+
+
+"""Representation of a Starling Account."""
 class StarlingAccount:
-    """Representation of a Starling Account."""
 
     def update_account_data(self) -> None:
         """Get basic information for the account."""
@@ -212,6 +246,48 @@ class StarlingAccount:
         self.currency = account["currency"]
         self.created_at = account["createdAt"]
 
+    def update_spending_categories_data(self) -> None:
+        """Get the latest spending categories information for the account."""
+
+        response = get(
+            _url(
+                "/accounts/{0}/spending-insights/spending-category?year={1}&month={2}".format(self._account_uid,
+                                                                                              YEAR, MONTH),
+                self._sandbox,
+            ),
+            headers=self._auth_headers,
+        )
+        response.raise_for_status()
+
+        response = response.json()
+        response_spending_categories = response.get("breakdown", {})
+
+        returned_categories = []
+
+        # Initialize spending categories
+        for category in response_spending_categories:
+            category_name = category.get("spendingCategory")
+            returned_categories.append(category_name)
+
+            # Initialize new SpendingCategory object if new
+            if category_name not in self.spending_categories:
+                self.spending_categories[category_name] = SpendingCategory(self._auth_headers, self._sandbox,
+                                                                           self._account_uid)
+
+            # Update the spending category data
+            self.spending_categories[category_name].update(category)
+
+        # Set values to zero if category not returned
+        for category_name in self.spending_categories:
+            if category_name not in returned_categories:
+                self.spending_categories[category_name].update({
+                    "totalSpent": 0.0,
+                    "totalReceived": 0.0,
+                    "netSpend": 0.0,
+                    "percentage": 0.0,
+                    "transactionCount": 0,
+                })
+
     def __init__(
         self, api_token: str, update: bool = False, sandbox: bool = False
     ) -> None:
@@ -239,7 +315,11 @@ class StarlingAccount:
         # Savings Goals Data
         self.savings_goals = {}  # type: Dict[str, SavingsGoal]
 
+        # Spending Category Data
+        self.spending_categories = {}  # type: Dict[str, SpendingCategory]
+
         if update:
             self.update_account_data()
             self.update_balance_data()
             self.update_savings_goal_data()
+            self.update_spending_categories_data()
