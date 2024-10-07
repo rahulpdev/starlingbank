@@ -20,6 +20,9 @@ An **unofficial** python package that provides access to parts of the Starling b
 
 
 ## Change Log
+7/10/2024
+* Added SpendingCategory class and relevant method to StarlingAccount class.
+
 18/12/2019
 * Removed `available_to_spend` property as this is no longer supported by the API.
 
@@ -51,6 +54,7 @@ To use all of the functionality this package affords, the following API scopes a
 * savings-goal:read
 * savings-goal-transfer:read
 * savings-goal-transfer:create
+* transaction:read
 
 ### Import
 ```python
@@ -71,11 +75,12 @@ my_account = StarlingAccount("<INSERT API TOKEN HERE>", update=True)
 ```
 
 ### Data
-3 data sets are currently supported:
+4 data sets are currently supported:
 
 1. Basic Account Data
 2. Balance Data
 3. Savings Goal Data
+4. Spending Category Data
 
  You have to request / refresh each set of data as required with the following commands:
 
@@ -83,7 +88,10 @@ my_account = StarlingAccount("<INSERT API TOKEN HERE>", update=True)
 my_account.update_account_data()
 my_account.update_balance_data()
 my_account.update_savings_goal_data()
+my_account.update_spending_categories_data(month, year)
 ```
+_Note: Available values for month are: JANUARY, FEBRUARY, MARCH, APRIL, MAY, JUNE, JULY, AUGUST, SEPTEMBER, OCTOBER, 
+NOVEMBER, DECEMBER. Omission of the month or year parameter will return data for the current month._
 
 #### Basic Account Data
 Properties:
@@ -136,6 +144,31 @@ _Note: Values are in minor units e.g. £1.50 will be represented as 150._
 Example:
 ```python
 print(my_account.savings_goals['c8553fd8-8260-65a6-885a-e0cb45691512'].total_saved_minor_units)
+```
+
+#### Spending Category Data
+Spending categories are stored as a dictionary of SpendingCategory objects, where the dictionary key is the spending_category. To get a list of spending categories and their respective data, you can run:
+
+```python
+for category, spending in my_account.spending_categories.items():
+    print("{0}: Total Spent = {1}, Total Received = {2}".format(category, spending.total_spent, spending.total_received))
+```
+
+Each category has the following properties:
+
+* spending_category
+* net_direction
+* currency
+* total_spent
+* total_received
+* net_spend
+* percentage
+* transaction_count
+
+Example:
+
+```python
+print(my_account.spending_categories['PAYMENTS'].total_spent)
 ```
 
 ### Update a Single Savings Goal

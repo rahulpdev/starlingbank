@@ -8,8 +8,6 @@ from datetime import datetime
 
 BASE_URL = "https://api.starlingbank.com/api/v2"
 BASE_URL_SANDBOX = "https://api-sandbox.starlingbank.com/api/v2"
-YEAR = str(datetime.now().year)
-MONTH = datetime.now().strftime("%B").upper()  # Converts month to uppercase
 
 
 """Build a URL from the API's base URLs."""
@@ -133,8 +131,10 @@ class SpendingCategory:
     ) -> None:
         self._auth_headers = auth_headers
         self._sandbox = sandbox
-        self.account_uid = account_uid
+        self._account_uid = account_uid
 
+        self.month = None
+        self.year = None
         self.spending_category = None
         self.net_direction = None
         self.currency = None
@@ -144,8 +144,10 @@ class SpendingCategory:
         self.percentage = 0.0
         self.transaction_count = 0
 
-    def update(self, category: Dict = None) -> None:
+    def update(self, category: Dict = None, month: str = None, year: str = None) -> None:
         """Update a single spending category data."""
+        self.month = month
+        self.year = year
         self.spending_category = category.get("spendingCategory")
         self.net_direction = category.get("netDirection")
         self.currency = category.get("currency")
@@ -246,13 +248,16 @@ class StarlingAccount:
         self.currency = account["currency"]
         self.created_at = account["createdAt"]
 
-    def update_spending_categories_data(self) -> None:
-        """Get the latest spending categories information for the account."""
+    def update_spending_categories_data(self, month: str = None, year: str = None) -> None:
+        """Get the spending categories information for the account, default for the latest month."""
+        if not month or not year:
+            year = str(datetime.now().year)
+            month = datetime.now().strftime("%B").upper()  # Converts month to uppercase
 
         response = get(
             _url(
                 "/accounts/{0}/spending-insights/spending-category?year={1}&month={2}".format(self._account_uid,
-                                                                                              YEAR, MONTH),
+                                                                                              year, month),
                 self._sandbox,
             ),
             headers=self._auth_headers,
@@ -275,7 +280,7 @@ class StarlingAccount:
                                                                            self._account_uid)
 
             # Update the spending category data
-            self.spending_categories[category_name].update(category)
+            self.spending_categories[category_name].update(category, month, year)
 
         # Set values to zero if category not returned
         for category_name in self.spending_categories:
